@@ -74,16 +74,16 @@ const phoneNumbers = ['573006180824', '573002702453'];
         </div>
       </section>
 
-      <section class="photos section">
-        <p class="eyebrow">La historia continúa</p>
-        <div class="photos-grid"><div><h2>Comparte<br /><em>tus fotos.</em></h2><p>Guarda entre 3 y 6 fotos favoritas de la noche. Próximamente compartiremos la carpeta para reunir todos nuestros recuerdos.</p><button class="button is-disabled" type="button" disabled>Carpeta próximamente</button></div><div class="photo-frame" aria-hidden="true"><span>♡</span><small>Momentos para recordar</small></div></div>
-      </section>
-
       <section class="rsvp section">
         <p class="eyebrow">Confirma tu asistencia</p>
         <h2>¿Nos<br /><em>acompañas?</em></h2>
         <p>Por favor confirmar antes del <strong>01 de octubre</strong>.</p>
         <div class="actions">{phoneNumbers.map((phone, index) => <a class="button button-light rsvp-link" data-phone={phone} href={`https://wa.me/${phone}?text=${message}`} target="_blank" rel="noreferrer">WhatsApp {index + 1} ↗</a>)}</div>
+      </section>
+
+      <section class="photos section">
+        <p class="eyebrow">La historia continúa</p>
+        <div class="photos-grid"><div><h2>Comparte<br /><em>tus fotos.</em></h2><p>Guarda entre 3 y 6 fotos favoritas de la noche. Próximamente compartiremos la carpeta para reunir todos nuestros recuerdos.</p><button class="button is-disabled" type="button" disabled>Carpeta próximamente</button></div><div class="photo-frame" aria-hidden="true"><span>♡</span><small>Momentos para recordar</small></div></div>
       </section>
 
       <footer><p class="hashtag">#Mis15milagro</p><p>♪ Cree y atrévete · Hanna y Ashley</p><p class="footer-name">Milagro Rodriguez Polo · XV</p><p class="photo-credit">Foto de fondo: <a href="https://commons.wikimedia.org/wiki/File:Colombia,_Cartagena,_Castillo_de_San_Felipe_de_Barajas.jpg" target="_blank" rel="noreferrer">Wikimedia Commons</a> · CC BY-SA 4.0</p></footer>
