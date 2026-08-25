@@ -27,8 +27,8 @@
 
       <section class="panel" data-mint-panel hidden>
         <h2>Crear invitados</h2>
-        <p class="hint">Una línea por invitado: <code>nombre | cupos</code>. Los cupos son opcionales (por defecto 1).</p>
-        <textarea data-mint-input rows="6" placeholder="María Rodriguez | 2&#10;Pedro Pérez&#10;Ana Gómez | 3"></textarea>
+        <p class="hint">Una línea por invitado: <code>nombre; cupos</code> (también acepta <code>|</code> o <code>, N</code>). Los cupos son opcionales (por defecto 1).</p>
+        <textarea data-mint-input rows="6" placeholder="María Rodriguez; 2&#10;Pedro Pérez&#10;Ana Gómez; 3"></textarea>
         <div class="row">
           <button class="btn btn-rose" type="button" data-mint>Crear invitados</button>
           <button class="btn btn-ghost" type="button" data-copy-all>Copiar todos</button>
@@ -118,8 +118,15 @@
           headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
           body: JSON.stringify({ action, slug: ADMIN_SLUG, ...payload }),
         });
-        if (!res.ok) throw new Error(`El servidor respondió ${res.status}. Revisa la clave e inténtalo de nuevo.`);
-        return res.json().catch(() => null);
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+          const errMsg =
+            body && typeof body === 'object' && 'error' in body
+              ? String((body as { error: unknown }).error)
+              : `El servidor respondió ${res.status}. Revisa la clave e inténtalo de nuevo.`;
+          throw new Error(errMsg);
+        }
+        return body;
       };
 
       const loadGuests = async (): Promise<void> => {
@@ -159,22 +166,6 @@
           ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch,
         );
 
-      const parseLines = (text: string): { name: string; cupos: number }[] =>
-        text
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean)
-          .map((line) => {
-            const [namePart, cuposPart] = line.split('|').map((part) => part.trim());
-            let cupos = 1;
-            if (cuposPart) {
-              const parsed = parseInt(cuposPart, 10);
-              if (!Number.isNaN(parsed) && parsed >= 1) cupos = parsed;
-            }
-            return { name: namePart ?? '', cupos };
-          })
-          .filter((guest) => guest.name.length > 0);
-
       const copyText = async (text: string): Promise<boolean> => {
         try {
           if (navigator.clipboard && window.isSecureContext) {
@@ -212,16 +203,29 @@
 
       mintBtn?.addEventListener('click', async () => {
         showError(mintError, '');
-        const lines = parseLines(mintInput?.value ?? '');
-        if (lines.length === 0) {
-          showError(mintError, 'Escribe al menos un invitado con el formato nombre | cupos.');
+        const raw = mintInput?.value ?? '';
+        if (!raw.trim()) {
+          showError(mintError, 'Escribe al menos un invitado con el formato nombre; cupos.');
           return;
         }
         mintBtn.disabled = true;
         try {
-          await api('mint', { lines });
+          const data = (await api('mint', { lines: raw })) as {
+            created?: Guest[];
+            errors?: { line: number; message: string }[];
+          };
           if (mintInput) mintInput.value = '';
-          showToast(`${lines.length} invitado${lines.length === 1 ? '' : 's'} creado${lines.length === 1 ? '' : 's'}.`);
+          const createdCount = data?.created?.length ?? 0;
+          showToast(`${createdCount} invitado${createdCount === 1 ? '' : 's'} creado${createdCount === 1 ? '' : 's'}.`);
+          const lineErrors = data?.errors ?? [];
+          if (lineErrors.length > 0) {
+            showError(
+              mintError,
+              `Algunas líneas no se pudieron crear: ${lineErrors
+                .map((e) => `L${e.line}: ${e.message}`)
+                .join(' · ')}`,
+            );
+          }
           await loadGuests();
         } catch (err) {
           showError(mintError, err instanceof Error ? err.message : 'No se pudieron crear los invitados.');
