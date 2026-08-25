@@ -319,13 +319,15 @@
         const target = event.target as HTMLElement;
         const btn = target.closest<HTMLElement>('[data-action]');
         if (!btn) return;
-        const id = btn.dataset.id;
-        if (!id) return;
 
+        // Cancelar no necesita id: va antes del guard de data-id.
         if (btn.dataset.action === 'edit-cancel') {
           renderGuests();
           return;
         }
+
+        const id = btn.dataset.id;
+        if (!id) return;
 
         if (btn.dataset.action === 'edit-save') {
           const tr = btn.closest('tr');
