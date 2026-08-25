@@ -79,7 +79,7 @@
         grupo: 'Queridos',
       };
 
-      type Guest = { id: string; name: string; cupos: number; status: string; token: string };
+      type Guest = { id: string; name: string; cupos: number; status: string; token: string; treatment?: string | null };
 
       const $ = <T extends HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
 
