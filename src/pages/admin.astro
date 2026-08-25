@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#f8f0ed" />
+    <title>Administración · XV de Milagro</title>
+  </head>
+  <body>
+    <main class="admin">
+      <header class="admin-header">
+        <p class="eyebrow">Invitaciones</p>
+        <h1>Administración</h1>
+        <p class="subtitle">XV de Milagro Rodriguez Polo · 10.10.2026</p>
+      </header>
+
+      <section class="panel secret-panel">
+        <h2>Clave de administrador</h2>
+        <div class="row">
+          <input id="secret" type="password" placeholder="Ingresa el admin secret" autocomplete="off" />
+          <button class="btn btn-rose" type="button" data-secret-save>Entrar</button>
+        </div>
+        <p class="hint">La clave se guarda solo en este navegador (sessionStorage) y se envía solo a la función de invitados. Nunca se sube al sitio.</p>
+        <p class="error" data-secret-error hidden></p>
+      </section>
+
+      <section class="panel" data-mint-panel hidden>
+        <h2>Crear invitados</h2>
+        <p class="hint">Una línea por invitado: <code>nombre | cupos</code>. Los cupos son opcionales (por defecto 1).</p>
+        <textarea data-mint-input rows="6" placeholder="María Rodriguez | 2&#10;Pedro Pérez&#10;Ana Gómez | 3"></textarea>
+        <div class="row">
+          <button class="btn btn-rose" type="button" data-mint>Crear invitados</button>
+          <button class="btn btn-ghost" type="button" data-copy-all>Copiar todos</button>
+        </div>
+        <p class="error" data-mint-error hidden></p>
+      </section>
+
+      <section class="panel" data-list-panel hidden>
+        <h2>Invitados <span class="count" data-count>0</span></h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Nombre</th><th>Cupos</th><th>Estado</th><th>Acciones</th></tr>
+            </thead>
+            <tbody data-guest-list></tbody>
+          </table>
+        </div>
+        <p class="empty" data-empty hidden>Aún no hay invitados. Crea los primeros arriba.</p>
+        <p class="error" data-list-error hidden></p>
+      </section>
+    </main>
+
+    <div class="toast" data-toast hidden></div>
+
+    <script>
+      const ADMIN_SLUG = 'milagro-xv';
+      const API_URL = import.meta.env.PUBLIC_GUEST_ADMIN_URL;
+      const SECRET_KEY = 'milagro_admin_secret';
+      const STATUS_LABEL = { confirmed: 'Confirmado', declined: 'No asistirá', pending: 'Pendiente' };
+      const STATUS_CLASS = { confirmed: 'badge-confirmed', declined: 'badge-declined', pending: 'badge-pending' };
+      const STATUS_ACTIONS = [
+        { value: 'confirmed', label: 'Confirmar' },
+        { value: 'declined', label: 'No asistirá' },
+        { value: 'pending', label: 'Pendiente' },
+      ];
+
+      type Guest = { id: string; name: string; cupos: number; status: string; token: string };
+
+      const $ = <T extends HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
+
+      const secretInput = $<HTMLInputElement>('#secret');
+      const secretSaveBtn = $<HTMLButtonElement>('[data-secret-save]');
+      const secretError = $<HTMLElement>('[data-secret-error]');
+      const mintPanel = $<HTMLElement>('[data-mint-panel]');
+      const listPanel = $<HTMLElement>('[data-list-panel]');
+      const mintInput = $<HTMLTextAreaElement>('[data-mint-input]');
+      const mintBtn = $<HTMLButtonElement>('[data-mint]');
+      const mintError = $<HTMLElement>('[data-mint-error]');
+      const copyAllBtn = $<HTMLButtonElement>('[data-copy-all]');
+      const guestList = $<HTMLElement>('[data-guest-list]');
+      const listError = $<HTMLElement>('[data-list-error]');
+      const emptyEl = $<HTMLElement>('[data-empty]');
+      const countEl = $<HTMLElement>('[data-count]');
+      const toast = $<HTMLElement>('[data-toast]');
+
+      let secret = sessionStorage.getItem(SECRET_KEY) ?? '';
+      let guests: Guest[] = [];
+
+      const showError = (el: HTMLElement | null, message: string): void => {
+        if (!el) return;
+        if (message) { el.textContent = message; el.hidden = false; } else { el.hidden = true; }
+      };
+
+      const showToast = (message: string): void => {
+        if (!toast) return;
+        toast.textContent = message;
+        toast.hidden = false;
+        window.setTimeout(() => { toast.hidden = true; }, 2000);
+      };
+
+      const toGuests = (data: unknown): Guest[] => {
+        if (Array.isArray(data)) return data as Guest[];
+        const obj = data as { guests?: Guest[]; data?: Guest[] };
+        if (obj && Array.isArray(obj.guests)) return obj.guests;
+        if (obj && Array.isArray(obj.data)) return obj.data;
+        return [];
+      };
+
+      const linkFor = (token: string): string =>
+        `${window.location.origin}/?invitacion=${encodeURIComponent(token)}`;
+
+      const api = async (action: string, payload: Record<string, unknown> = {}): Promise<unknown> => {
+        if (!API_URL) throw new Error('Falta la configuración PUBLIC_GUEST_ADMIN_URL en el entorno.');
+        if (!secret) throw new Error('Ingresa la clave de administrador.');
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-secret': secret },
+          body: JSON.stringify({ action, slug: ADMIN_SLUG, ...payload }),
+        });
+        if (!res.ok) throw new Error(`El servidor respondió ${res.status}. Revisa la clave e inténtalo de nuevo.`);
+        return res.json().catch(() => null);
+      };
+
+      const loadGuests = async (): Promise<void> => {
+        showError(listError, '');
+        if (!guestList) return;
+        try {
+          const data = await api('list');
+          guests = toGuests(data);
+          guestList.innerHTML = '';
+          for (const guest of guests) {
+            const tr = document.createElement('tr');
+            const status = STATUS_LABEL[guest.status] ?? guest.status ?? 'Pendiente';
+            const statusClass = STATUS_CLASS[guest.status] ?? 'badge-pending';
+            const actions = STATUS_ACTIONS.map(
+              (a) =>
+                `<button class="btn btn-sm" type="button" data-action="status" data-status="${a.value}" data-id="${guest.id}">${a.label}</button>`,
+            ).join('');
+            tr.innerHTML = `
+              <td>${escapeHTML(guest.name)}</td>
+              <td>${guest.cupos ?? 1}</td>
+              <td><span class="badge ${statusClass}">${escapeHTML(status)}</span></td>
+              <td class="row-actions">
+                <button class="btn btn-sm btn-ghost" type="button" data-action="copy" data-id="${guest.id}">Copiar link</button>
+                ${actions}
+              </td>`;
+            guestList.appendChild(tr);
+          }
+          if (countEl) countEl.textContent = String(guests.length);
+          if (emptyEl) emptyEl.hidden = guests.length > 0;
+        } catch (err) {
+          showError(listError, err instanceof Error ? err.message : 'No se pudieron cargar los invitados.');
+        }
+      };
+
+      const escapeHTML = (value: string): string =>
+        value.replace(/[&<>"']/g, (ch) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch,
+        );
+
+      const parseLines = (text: string): { name: string; cupos: number }[] =>
+        text
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [namePart, cuposPart] = line.split('|').map((part) => part.trim());
+            let cupos = 1;
+            if (cuposPart) {
+              const parsed = parseInt(cuposPart, 10);
+              if (!Number.isNaN(parsed) && parsed >= 1) cupos = parsed;
+            }
+            return { name: namePart ?? '', cupos };
+          })
+          .filter((guest) => guest.name.length > 0);
+
+      const copyText = async (text: string): Promise<boolean> => {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+          }
+        } catch {
+          /* continue to fallback */
+        }
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          const ok = document.execCommand('copy');
+          textarea.remove();
+          return ok;
+        } catch {
+          return false;
+        }
+      };
+
+      secretSaveBtn?.addEventListener('click', async () => {
+        showError(secretError, '');
+        const value = secretInput?.value.trim() ?? '';
+        if (!value) { showError(secretError, 'Ingresa la clave de administrador.'); return; }
+        secret = value;
+        sessionStorage.setItem(SECRET_KEY, secret);
+        if (mintPanel) mintPanel.hidden = false;
+        if (listPanel) listPanel.hidden = false;
+        await loadGuests();
+      });
+
+      mintBtn?.addEventListener('click', async () => {
+        showError(mintError, '');
+        const lines = parseLines(mintInput?.value ?? '');
+        if (lines.length === 0) {
+          showError(mintError, 'Escribe al menos un invitado con el formato nombre | cupos.');
+          return;
+        }
+        mintBtn.disabled = true;
+        try {
+          await api('mint', { lines });
+          if (mintInput) mintInput.value = '';
+          showToast(`${lines.length} invitado${lines.length === 1 ? '' : 's'} creado${lines.length === 1 ? '' : 's'}.`);
+          await loadGuests();
+        } catch (err) {
+          showError(mintError, err instanceof Error ? err.message : 'No se pudieron crear los invitados.');
+        } finally {
+          mintBtn.disabled = false;
+        }
+      });
+
+      copyAllBtn?.addEventListener('click', async () => {
+        const text = guests.map((guest) => linkFor(guest.token)).join('\n');
+        if (!text) { showToast('No hay invitados para copiar.'); return; }
+        const ok = await copyText(text);
+        showToast(ok ? 'Links copiados.' : 'No se pudo copiar. Selecciona y copia manualmente.');
+      });
+
+      guestList?.addEventListener('click', async (event) => {
+        const target = event.target as HTMLElement;
+        const btn = target.closest<HTMLElement>('[data-action]');
+        if (!btn) return;
+        const id = btn.dataset.id;
+        if (!id) return;
+        if (btn.dataset.action === 'copy') {
+          const guest = guests.find((g) => g.id === id);
+          if (!guest) return;
+          const ok = await copyText(linkFor(guest.token));
+          showToast(ok ? 'Link copiado.' : 'No se pudo copiar. Selecciona y copia manualmente.');
+          return;
+        }
+        if (btn.dataset.action === 'status') {
+          const status = btn.dataset.status;
+          if (!status) return;
+          showError(listError, '');
+          try {
+            await api('set_status', { id, status });
+            await loadGuests();
+          } catch (err) {
+            showError(listError, err instanceof Error ? err.message : 'No se pudo actualizar el estado.');
+          }
+        }
+      });
+
+      if (secret && secretInput) {
+        secretInput.value = secret;
+        if (mintPanel) mintPanel.hidden = false;
+        if (listPanel) listPanel.hidden = false;
+        void loadGuests();
+      }
+    </script>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Parisienne&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap');
+      :root{--ink:#3a2630;--rose:#a96379;--blush:#f4e1e2;--cream:#fbf6f1;--gold:#c49a62;--serif:'Playfair Display',Georgia,serif;--sans:'DM Sans',sans-serif}
+      *{box-sizing:border-box}
+      body{margin:0;background:var(--cream);color:var(--ink);font:15px/1.6 var(--sans)}
+      .admin{max-width:880px;margin:0 auto;padding:clamp(3rem,8vw,6rem) clamp(1.25rem,5vw,3rem)}
+      .admin-header h1{font:400 clamp(2.6rem,7vw,4.5rem)/.95 var(--serif);letter-spacing:-.05em;margin:.2rem 0 .4rem}
+      .eyebrow{letter-spacing:.18em;text-transform:uppercase;font-size:.7rem;color:var(--rose);margin:0}
+      .subtitle{margin:0;color:#765d64}
+      .panel{background:#fffdfb;border:1px solid #dfc7bd;padding:1.6rem;margin-top:1.6rem;box-shadow:10px 10px 0 var(--blush)}
+      .panel h2{font:400 1.6rem var(--serif);margin:0 0 1rem}
+      .row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:stretch}
+      input[type=password],textarea{width:100%;padding:.8rem .9rem;border:1px solid #dfc7bd;background:#fff;color:var(--ink);font:inherit;border-radius:0}
+      input[type=password]{flex:1;min-width:220px}
+      textarea{resize:vertical;min-height:8rem;margin-bottom:.8rem}
+      .btn{border:1px solid var(--gold);border-radius:0;padding:.75rem 1.1rem;font:500 .78rem var(--sans);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;background:transparent;color:var(--ink)}
+      .btn:disabled{opacity:.5;cursor:not-allowed}
+      .btn:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
+      .btn-rose{background:var(--rose);border-color:var(--rose);color:#fff8f3}
+      .btn-ghost{border-color:#dfc7bd;color:#765d64}
+      .btn-sm{padding:.42rem .65rem;font-size:.66rem}
+      .hint{color:#765d64;font-size:.85rem}
+      .hint code{background:var(--blush);padding:.05rem .3rem;color:var(--ink)}
+      .error{color:#a03a4e;font-weight:500;margin:.7rem 0 0}
+      .count{font:500 .8rem var(--sans);color:var(--rose);margin-left:.4rem}
+      .table-wrap{overflow-x:auto}
+      table{width:100%;border-collapse:collapse;margin-top:.4rem}
+      th,td{text-align:left;padding:.7rem .6rem;border-bottom:1px solid #efddd8;vertical-align:middle}
+      th{font:500 .68rem var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#765d64}
+      td{color:var(--ink)}
+      .row-actions{display:flex;gap:.35rem;flex-wrap:wrap}
+      .badge{display:inline-block;padding:.22rem .6rem;border-radius:999px;font:500 .66rem var(--sans);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+      .badge-confirmed{background:#e2efe6;color:#4d7c5f}
+      .badge-declined{background:#f0e2e6;color:#8a6470}
+      .badge-pending{background:#f5ead6;color:#a97c3f}
+      .empty{color:#765d64;font-style:italic}
+      .toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%);background:var(--ink);color:#fff8f3;padding:.6rem 1.1rem;font:500 .8rem var(--sans);box-shadow:0 8px 20px rgba(58,38,48,.25);z-index:30}
+    </style>
+  </body>
+</html>

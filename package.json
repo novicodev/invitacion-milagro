@@ -3,6 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "astro dev", "build": "astro check && astro build", "check": "astro check" },
-  "dependencies": { "@astrojs/check": "^0.9.4", "astro": "^5.13.0", "typescript": "^5.8.3" }
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@supabase/supabase-js": "^2.112.4",
+    "astro": "^5.13.0",
+    "typescript": "^5.8.3"
+  }
 }
