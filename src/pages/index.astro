@@ -132,6 +132,29 @@ const phoneNumbers = ['573006180824', '573002702453'];
           )
           .join(' ');
 
+      // "FLIA BIVANQUE RODRIGUEZ" → "Bivanque Rodriguez" (quita prefijo/sufijo familia)
+      const cleanFamilyName = (rawName: string): string =>
+        rawName
+          .replace(/^(FLIA|FAMILIA)\s+/i, '')
+          .replace(/\s+(Y\s+)?(FLIA|FAMILIA)\s*$/i, '')
+          .trim();
+
+      // a → Querida · d → Querido · fam → Querida familia X · grupo → Queridos
+      // sin tratamiento: si el nombre parece familia (FLIA/FAMILIA) → familia, si no → Querida
+      const buildSalutation = (
+        displayName: string,
+        rawName: string,
+        treatment: string | null,
+      ): string => {
+        const looksLikeFamily = /^(FLIA|FAMILIA)\b|\bY\s+(FLIA|FAMILIA)\b/i.test(rawName);
+        if (treatment === 'fam' || (!treatment && looksLikeFamily)) {
+          return `Querida familia ${toTitleCase(cleanFamilyName(rawName))}:`;
+        }
+        if (treatment === 'd') return `Querido ${displayName}:`;
+        if (treatment === 'grupo') return `Queridos ${displayName}:`;
+        return `Querida ${displayName}:`;
+      };
+
       const applyGuestPersonalization = async () => {
         if (!token || !supabaseUrl || !supabaseAnonKey) return;
         const dedication = document.querySelector<HTMLElement>('[data-guest-dedication]');
