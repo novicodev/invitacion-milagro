@@ -72,6 +72,12 @@
         { value: 'declined', label: 'No asistirá', cls: 'btn-decline' },
         { value: 'pending', label: 'Pendiente', cls: 'btn-pending' },
       ];
+      const TREATMENT_LABEL: Record<string, string> = {
+        a: 'Querida',
+        d: 'Querido',
+        fam: 'Querida familia',
+        grupo: 'Queridos',
+      };
 
       type Guest = { id: string; name: string; cupos: number; status: string; token: string };
 
@@ -193,6 +199,7 @@
             <td data-label="Estado"><span class="badge ${statusClass}">${escapeHTML(status)}</span></td>
             <td data-label="Acciones" class="row-actions">
               <button class="btn btn-sm btn-ghost" type="button" data-action="copy" data-id="${guest.id}">Copiar link</button>
+              <button class="btn btn-sm btn-ghost" type="button" data-action="edit" data-id="${guest.id}">Editar</button>
               ${actions}
             </td>`;
           guestList.appendChild(tr);
@@ -314,6 +321,71 @@
         if (!btn) return;
         const id = btn.dataset.id;
         if (!id) return;
+
+        if (btn.dataset.action === 'edit-cancel') {
+          renderGuests();
+          return;
+        }
+
+        if (btn.dataset.action === 'edit-save') {
+          const tr = btn.closest('tr');
+          const nameInput = tr?.querySelector<HTMLInputElement>('[data-edit-name]');
+          const cuposInput = tr?.querySelector<HTMLInputElement>('[data-edit-cupos]');
+          const treatmentSel = tr?.querySelector<HTMLSelectElement>('[data-edit-treatment]');
+          if (!nameInput || !cuposInput || !treatmentSel) return;
+          const name = nameInput.value.trim();
+          const cupos = Number(cuposInput.value);
+          const treatment = treatmentSel.value === '' ? null : treatmentSel.value;
+          if (!name) { showError(listError, 'El nombre no puede estar vacío.'); return; }
+          if (!Number.isInteger(cupos) || cupos < 1 || cupos > 999) {
+            showError(listError, 'Cupos debe ser un entero entre 1 y 999.'); return;
+          }
+          showError(listError, '');
+          try {
+            await api('update_guest', { id, name, cupos, treatment });
+            showToast('Invitado actualizado.');
+            await loadGuests();
+          } catch (err) {
+            showError(listError, err instanceof Error ? err.message : 'No se pudo guardar.');
+          }
+          return;
+        }
+
+        if (btn.dataset.action === 'edit') {
+          const guest = guests.find((g) => g.id === id);
+          if (!guest) return;
+          const tr = btn.closest('tr');
+          if (!tr) return;
+          const treatmentOptions = Object.entries(TREATMENT_LABEL)
+            .map(
+              ([value, label]) =>
+                `<option value="${value}" ${guest.treatment === value ? 'selected' : ''}>${label}</option>`,
+            )
+            .join('');
+          tr.innerHTML = `
+            <td colspan="4">
+              <div class="edit-form">
+                <label>Nombre
+                  <input data-edit-name type="text" value="${escapeHTML(guest.name)}" maxlength="120" />
+                </label>
+                <label>Cupos
+                  <input data-edit-cupos type="number" min="1" max="999" value="${guest.cupos ?? 1}" />
+                </label>
+                <label>Tratamiento
+                  <select data-edit-treatment>
+                    <option value="" ${guest.treatment ? '' : 'selected'}>Auto</option>
+                    ${treatmentOptions}
+                  </select>
+                </label>
+                <div class="edit-actions">
+                  <button class="btn btn-sm btn-confirm" type="button" data-action="edit-save" data-id="${guest.id}">Guardar</button>
+                  <button class="btn btn-sm btn-ghost" type="button" data-action="edit-cancel">Cancelar</button>
+                </div>
+              </div>
+            </td>`;
+          return;
+        }
+
         if (btn.dataset.action === 'copy') {
           const guest = guests.find((g) => g.id === id);
           if (!guest) return;
@@ -372,6 +444,10 @@
       .pager{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-top:.9rem}
       .page-info{font:500 .72rem var(--sans);color:#765d64;letter-spacing:.04em}
       .pager .btn{min-height:38px}
+      .edit-form{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.7rem;align-items:end}
+      .edit-form label{display:flex;flex-direction:column;gap:.3rem;font:500 .68rem var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#765d64}
+      .edit-form input,.edit-form select{width:100%;padding:.6rem .7rem;border:1px solid #dfc7bd;background:#fff;color:var(--ink);font:400 .95rem var(--sans);border-radius:0}
+      .edit-actions{display:flex;gap:.5rem;flex-wrap:wrap}
       .table-wrap{overflow-x:auto}
       table{width:100%;border-collapse:collapse;margin-top:.4rem}
       th,td{text-align:left;padding:.7rem .6rem;border-bottom:1px solid #efddd8;vertical-align:middle}
@@ -413,6 +489,9 @@
         .list-tools input[type=search]{font-size:16px;max-width:none}
         .pager{flex-wrap:wrap}
         .pager .btn{flex:1;min-height:44px}
+        .edit-form{grid-template-columns:1fr;align-items:stretch}
+        .edit-form input,.edit-form select{font-size:16px}
+        .edit-actions .btn{flex:1;min-height:44px}
       }
     </style>
   </body>
