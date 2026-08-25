@@ -60,9 +60,9 @@
       const STATUS_LABEL = { confirmed: 'Confirmado', declined: 'No asistirá', pending: 'Pendiente' };
       const STATUS_CLASS = { confirmed: 'badge-confirmed', declined: 'badge-declined', pending: 'badge-pending' };
       const STATUS_ACTIONS = [
-        { value: 'confirmed', label: 'Confirmar' },
-        { value: 'declined', label: 'No asistirá' },
-        { value: 'pending', label: 'Pendiente' },
+        { value: 'confirmed', label: 'Confirmar', cls: 'btn-confirm' },
+        { value: 'declined', label: 'No asistirá', cls: 'btn-decline' },
+        { value: 'pending', label: 'Pendiente', cls: 'btn-pending' },
       ];
 
       type Guest = { id: string; name: string; cupos: number; status: string; token: string };
@@ -142,7 +142,7 @@
             const statusClass = STATUS_CLASS[guest.status] ?? 'badge-pending';
             const actions = STATUS_ACTIONS.map(
               (a) =>
-                `<button class="btn btn-sm" type="button" data-action="status" data-status="${a.value}" data-id="${guest.id}">${a.label}</button>`,
+                `<button class="btn btn-sm ${a.cls}" type="button" data-action="status" data-status="${a.value}" data-id="${guest.id}">${a.label}</button>`,
             ).join('');
             tr.innerHTML = `
               <td data-label="Nombre">${escapeHTML(guest.name)}</td>
@@ -310,6 +310,9 @@
       .badge-confirmed{background:#e2efe6;color:#4d7c5f}
       .badge-declined{background:#f0e2e6;color:#8a6470}
       .badge-pending{background:#f5ead6;color:#a97c3f}
+      .btn-confirm{background:#4d7c5f;border-color:#4d7c5f;color:#fff8f3}
+      .btn-decline{background:#a03a4e;border-color:#a03a4e;color:#fff8f3}
+      .btn-pending{background:#f5ead6;border-color:#c49a62;color:#8a5f28}
       .empty{color:#765d64;font-style:italic}
       .toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%);background:var(--ink);color:#fff8f3;padding:.6rem 1.1rem;font:500 .8rem var(--sans);box-shadow:0 8px 20px rgba(58,38,48,.25);z-index:30}
 
@@ -328,9 +331,13 @@
         tr{background:#fffdfb;border:1px solid #dfc7bd;padding:.85rem 1rem;margin-bottom:.9rem;box-shadow:5px 5px 0 var(--blush)}
         td{padding:.4rem .1rem;border-bottom:0;display:flex;justify-content:space-between;align-items:center;gap:.7rem;font-size:.95rem}
         td::before{content:attr(data-label);font:500 .62rem var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#765d64;flex-shrink:0}
-        .row-actions{display:flex;flex-direction:column;gap:.4rem;padding-top:.7rem;border-top:1px dashed #efddd8;margin-top:.6rem}
-        .row-actions .btn{width:100%}
+        .row-actions{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;padding-top:.7rem;border-top:1px dashed #efddd8;margin-top:.6rem}
+        .row-actions .btn{width:100%;min-height:44px}
         .row-actions .btn-sm{font-size:.72rem}
+        .row-actions .btn-confirm{order:1}
+        .row-actions .btn-decline{order:2}
+        .row-actions .btn-ghost{order:3}
+        .row-actions .btn-pending{order:4}
       }
     </style>
   </body>
