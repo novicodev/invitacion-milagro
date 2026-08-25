@@ -38,6 +38,9 @@
 
       <section class="panel" data-list-panel hidden>
         <h2>Invitados <span class="count" data-count>0</span></h2>
+        <div class="list-tools">
+          <input type="search" data-search placeholder="Buscar invitado…" autocomplete="off" />
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -45,6 +48,11 @@
             </thead>
             <tbody data-guest-list></tbody>
           </table>
+        </div>
+        <div class="pager" data-pager hidden>
+          <button class="btn btn-sm btn-ghost" type="button" data-prev>← Anterior</button>
+          <span class="page-info" data-page-info></span>
+          <button class="btn btn-sm btn-ghost" type="button" data-next>Siguiente →</button>
         </div>
         <p class="empty" data-empty hidden>Aún no hay invitados. Crea los primeros arriba.</p>
         <p class="error" data-list-error hidden></p>
@@ -83,6 +91,15 @@
       const emptyEl = $<HTMLElement>('[data-empty]');
       const countEl = $<HTMLElement>('[data-count]');
       const toast = $<HTMLElement>('[data-toast]');
+      const searchInput = $<HTMLInputElement>('[data-search]');
+      const pagerEl = $<HTMLElement>('[data-pager]');
+      const pageInfoEl = $<HTMLElement>('[data-page-info]');
+      const prevBtn = $<HTMLButtonElement>('[data-prev]');
+      const nextBtn = $<HTMLButtonElement>('[data-next]');
+
+      const PAGE_SIZE = 20;
+      let searchQuery = '';
+      let page = 1;
 
       let secret = sessionStorage.getItem(SECRET_KEY) ?? '';
       let guests: Guest[] = [];
@@ -135,27 +152,7 @@
         try {
           const data = await api('list');
           guests = toGuests(data);
-          guestList.innerHTML = '';
-          for (const guest of guests) {
-            const tr = document.createElement('tr');
-            const status = STATUS_LABEL[guest.status] ?? guest.status ?? 'Pendiente';
-            const statusClass = STATUS_CLASS[guest.status] ?? 'badge-pending';
-            const actions = STATUS_ACTIONS.map(
-              (a) =>
-                `<button class="btn btn-sm ${a.cls}" type="button" data-action="status" data-status="${a.value}" data-id="${guest.id}">${a.label}</button>`,
-            ).join('');
-            tr.innerHTML = `
-              <td data-label="Nombre">${escapeHTML(guest.name)}</td>
-              <td data-label="Cupos">${guest.cupos ?? 1}</td>
-              <td data-label="Estado"><span class="badge ${statusClass}">${escapeHTML(status)}</span></td>
-              <td data-label="Acciones" class="row-actions">
-                <button class="btn btn-sm btn-ghost" type="button" data-action="copy" data-id="${guest.id}">Copiar link</button>
-                ${actions}
-              </td>`;
-            guestList.appendChild(tr);
-          }
-          if (countEl) countEl.textContent = String(guests.length);
-          if (emptyEl) emptyEl.hidden = guests.length > 0;
+          renderGuests();
         } catch (err) {
           showError(listError, err instanceof Error ? err.message : 'No se pudieron cargar los invitados.');
         }
@@ -165,6 +162,73 @@
         value.replace(/[&<>"']/g, (ch) =>
           ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch,
         );
+
+      const matchesQuery = (guest: Guest): boolean => {
+        if (!searchQuery) return true;
+        const q = searchQuery.toLowerCase();
+        const haystack = `${guest.name} ${guest.cupos ?? ''} ${STATUS_LABEL[guest.status] ?? ''}`.toLowerCase();
+        return haystack.includes(q);
+      };
+
+      const renderGuests = (): void => {
+        if (!guestList) return;
+        const filtered = guests.filter(matchesQuery);
+        const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+        page = Math.min(page, totalPages);
+        const start = (page - 1) * PAGE_SIZE;
+        const pageGuests = filtered.slice(start, start + PAGE_SIZE);
+
+        guestList.innerHTML = '';
+        for (const guest of pageGuests) {
+          const tr = document.createElement('tr');
+          const status = STATUS_LABEL[guest.status] ?? guest.status ?? 'Pendiente';
+          const statusClass = STATUS_CLASS[guest.status] ?? 'badge-pending';
+          const actions = STATUS_ACTIONS.map(
+            (a) =>
+              `<button class="btn btn-sm ${a.cls}" type="button" data-action="status" data-status="${a.value}" data-id="${guest.id}">${a.label}</button>`,
+          ).join('');
+          tr.innerHTML = `
+            <td data-label="Nombre">${escapeHTML(guest.name)}</td>
+            <td data-label="Cupos">${guest.cupos ?? 1}</td>
+            <td data-label="Estado"><span class="badge ${statusClass}">${escapeHTML(status)}</span></td>
+            <td data-label="Acciones" class="row-actions">
+              <button class="btn btn-sm btn-ghost" type="button" data-action="copy" data-id="${guest.id}">Copiar link</button>
+              ${actions}
+            </td>`;
+          guestList.appendChild(tr);
+        }
+
+        if (countEl) {
+          countEl.textContent = searchQuery
+            ? `${filtered.length} de ${guests.length}`
+            : String(guests.length);
+        }
+        if (emptyEl) emptyEl.hidden = filtered.length > 0;
+        if (pagerEl) pagerEl.hidden = filtered.length <= PAGE_SIZE;
+        if (pageInfoEl) {
+          const from = filtered.length === 0 ? 0 : start + 1;
+          const to = Math.min(start + PAGE_SIZE, filtered.length);
+          pageInfoEl.textContent = filtered.length
+            ? `${from}–${to} de ${filtered.length}`
+            : '0 resultados';
+        }
+        if (prevBtn) prevBtn.disabled = page <= 1;
+        if (nextBtn) nextBtn.disabled = page >= totalPages;
+      };
+
+      searchInput?.addEventListener('input', () => {
+        searchQuery = searchInput.value.trim();
+        page = 1;
+        renderGuests();
+      });
+      prevBtn?.addEventListener('click', () => {
+        page = Math.max(1, page - 1);
+        renderGuests();
+      });
+      nextBtn?.addEventListener('click', () => {
+        page += 1;
+        renderGuests();
+      });
 
       const copyText = async (text: string): Promise<boolean> => {
         try {
@@ -235,7 +299,10 @@
       });
 
       copyAllBtn?.addEventListener('click', async () => {
-        const text = guests.map((guest) => linkFor(guest.token)).join('\n');
+        const text = guests
+          .filter(matchesQuery)
+          .map((guest) => linkFor(guest.token))
+          .join('\n');
         if (!text) { showToast('No hay invitados para copiar.'); return; }
         const ok = await copyText(text);
         showToast(ok ? 'Links copiados.' : 'No se pudo copiar. Selecciona y copia manualmente.');
@@ -300,6 +367,11 @@
       .hint code{background:var(--blush);padding:.05rem .3rem;color:var(--ink)}
       .error{color:#a03a4e;font-weight:500;margin:.7rem 0 0}
       .count{font:500 .8rem var(--sans);color:var(--rose);margin-left:.4rem}
+      .list-tools{margin:.4rem 0 .8rem}
+      .list-tools input[type=search]{width:100%;max-width:420px;padding:.7rem .9rem;border:1px solid #dfc7bd;background:#fff;color:var(--ink);font:inherit;border-radius:0}
+      .pager{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-top:.9rem}
+      .page-info{font:500 .72rem var(--sans);color:#765d64;letter-spacing:.04em}
+      .pager .btn{min-height:38px}
       .table-wrap{overflow-x:auto}
       table{width:100%;border-collapse:collapse;margin-top:.4rem}
       th,td{text-align:left;padding:.7rem .6rem;border-bottom:1px solid #efddd8;vertical-align:middle}
@@ -338,6 +410,9 @@
         .row-actions .btn-decline{order:2}
         .row-actions .btn-ghost{order:3}
         .row-actions .btn-pending{order:4}
+        .list-tools input[type=search]{font-size:16px;max-width:none}
+        .pager{flex-wrap:wrap}
+        .pager .btn{flex:1;min-height:44px}
       }
     </style>
   </body>
