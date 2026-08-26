@@ -79,6 +79,7 @@ const phoneNumbers = ['573006180824', '573002702453'];
         <p class="eyebrow">Confirma tu asistencia</p>
         <h2>¿Nos<br /><em>acompañas?</em></h2>
         <p>Por favor confirmar antes del <strong>01 de octubre</strong>.</p>
+        <p class="cupos-note" data-cupos-note hidden></p>
         <div class="actions">{phoneNumbers.map((phone, index) => <a class="button button-light rsvp-link" data-phone={phone} href={`https://wa.me/${phone}?text=${message}`} target="_blank" rel="noreferrer">WhatsApp {index + 1} ↗</a>)}</div>
       </section>
 
@@ -159,6 +160,7 @@ const phoneNumbers = ['573006180824', '573002702453'];
         if (!token || !supabaseUrl || !supabaseAnonKey) return;
         const dedication = document.querySelector<HTMLElement>('[data-guest-dedication]');
         const salutation = document.querySelector<HTMLElement>('[data-guest-salutation]');
+        const cuposNote = document.querySelector<HTMLElement>('[data-cupos-note]');
         const rsvpLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('.rsvp-link'));
         if (!dedication || !salutation || rsvpLinks.length === 0) return;
         try {
@@ -168,11 +170,22 @@ const phoneNumbers = ['573006180824', '573002702453'];
           if (error || !Array.isArray(data) || data.length !== 1) return;
           const row = data[0];
           if (!row || row.slug !== 'milagro-xv' || !row.guest_name) return;
-          const displayName = toTitleCase(String(row.guest_name));
+          const rawName = String(row.guest_name);
+          const displayName = toTitleCase(rawName);
+          const treatment = typeof row.treatment === 'string' ? row.treatment : null;
           dedication.textContent = `para ${displayName}`;
           dedication.hidden = false;
-          salutation.textContent = `Querida ${displayName}:`;
+          salutation.textContent = buildSalutation(displayName, rawName, treatment);
           salutation.hidden = false;
+          // Cupos reservados (sección RSVP) — tuteo para individuales, ustedes para grupos
+          if (cuposNote && typeof row.cupos === 'number' && row.cupos > 0) {
+            const isGroup = treatment === 'fam' || treatment === 'grupo';
+            const noun = row.cupos === 1 ? 'lugar' : 'lugares';
+            cuposNote.textContent = isGroup
+              ? `Reservamos ${row.cupos} ${noun} para ustedes`
+              : `Reservamos ${row.cupos} ${noun} para ti`;
+            cuposNote.hidden = false;
+          }
           const encodedName = encodeURIComponent(displayName);
           rsvpLinks.forEach((link) => {
             link.href = link.href.replace('%5BTu%20nombre%5D', encodedName);
@@ -195,4 +208,6 @@ const phoneNumbers = ['573006180824', '573002702453'];
 .cover{background-image:url('https://commons.wikimedia.org/wiki/Special:FilePath/Colombia%2C_Cartagena%2C_Castillo_de_San_Felipe_de_Barajas.jpg')!important;background-position:center;background-size:cover}.cover-art{z-index:0;background:transparent!important}.cover-video{display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;filter:saturate(.72);z-index:0}.cover:after{z-index:1;background:linear-gradient(145deg,rgba(93,37,62,.58),rgba(57,38,45,.68))!important}.cover-copy{z-index:2}.cover h1{font-size:clamp(5rem,16vw,8rem);margin:1rem 0}.name{font-size:clamp(5.5rem,20vw,14rem);line-height:1.12;padding-bottom:.2em;margin:4.2rem 0 .65rem;background:linear-gradient(110deg,#fff8ef 12%,#f0c98d 35%,#fffdf8 48%,#d8a65f 62%,#fff7e9 80%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;animation:name-shine 4.5s ease-in-out infinite}@keyframes name-shine{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}.surname{margin-top:0}.date{margin-top:2rem}.scroll-arrow{margin-top:5rem}@media(min-width:701px){.name{font-size:clamp(4rem,10vw,8rem)}}@media(max-width:700px){.cover-video{display:block}}.music-btn{position:fixed;right:1rem;bottom:1rem;z-index:21;display:flex;align-items:center;gap:.5rem;padding:.65rem .9rem;border:1px solid var(--gold);border-radius:999px;background:rgba(255,253,251,.92);color:var(--ink);font:500 .75rem var(--sans);letter-spacing:.08em;cursor:pointer;box-shadow:0 8px 20px rgba(58,38,48,.18)}.music-btn.is-playing{background:var(--rose);border-color:var(--rose);color:#fff8f3}.music-btn:focus-visible{outline:2px solid var(--rose);outline-offset:3px}.music-icon{font:1rem var(--serif)}
 .guest-greeting{font:italic 1.35rem/1.55 var(--serif);color:var(--rose);margin:0 0 1.4rem}
 .cover-dedication{font:italic clamp(1.6rem,4vw,2.3rem)/1.3 'Parisienne',cursive;color:#f2d6bd;margin:1.6rem 0 0;text-shadow:0 1px 14px rgba(53,21,34,.5)}
+.cupos-note{font:italic .95rem/1.5 var(--sans);color:#765d64;margin:.4rem 0 1.8rem}
+.cupos-note strong,.cupos-note b{color:var(--rose)}
 .letter-salutation{font:italic 1.25rem/1.5 var(--serif);color:var(--rose);margin:0 0 1.2rem}</style>
