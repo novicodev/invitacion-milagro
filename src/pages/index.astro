@@ -180,7 +180,7 @@ const phoneNumbers = ['573006180824', '573002702453'];
           // Cupos reservados (sección RSVP) — tuteo para individuales, ustedes para grupos
           if (cuposNote && typeof row.cupos === 'number' && row.cupos > 0) {
             const isGroup = treatment === 'fam' || treatment === 'grupo';
-            const noun = row.cupos === 1 ? 'lugar' : 'lugares';
+            const noun = row.cupos === 1 ? 'cupo' : 'cupos';
             cuposNote.textContent = isGroup
               ? `Reservamos ${row.cupos} ${noun} para ustedes`
               : `Reservamos ${row.cupos} ${noun} para ti`;
